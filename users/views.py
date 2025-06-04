@@ -7,6 +7,8 @@ from .serializers import UserSerializer
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.contrib.auth import get_user_model
 from django.contrib.auth import authenticate
+from .utils import generate_otp, sendOtp
+from .models import EmailOtp
 
 User = get_user_model()
 
@@ -29,8 +31,47 @@ class RegisterView(APIView):
         
 
         user = User.objects.create_user(username=username ,email=email, password=password)
-        serializer = UserSerializer(user)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        # user.is_active = False
+        user.save()
+
+        return Response({'message' :'successfully registered'}, status=status.HTTP_201_CREATED)
+
+        # otp = generate_otp()
+        # print(otp)
+        # EmailOtp.objects.create(user=user, otp=otp)
+        # sendOtp(email, otp)
+        # return Response({'message' : 'user registered. OTP sent to email'}, status=status.HTTP_201_CREATED)
+    
+
+
+# class VerifyOtpView(APIView):
+#     permission_classes = [AllowAny]
+#     def post(self,request):
+#         email = request.data.get('email')
+#         otp = request.data.get('otp')
+
+#         try:
+#             user = User.objects.get(email=email)
+#             otpRecord = EmailOtp.objects.filter(user=user, otp=otp, is_verified=False).last()
+            
+#             if not otpRecord:
+#                 return Response({'erorr': 'Invalid otp'}, status=status.HTTP_400_BAD_REQUEST)
+            
+#             if otpRecord.IsExpired():
+#                 return Response({'error': 'OTP expired'}, status=status.HTTP_400_BAD_REQUEST)
+            
+#             otpRecord.is_verified = True
+#             otpRecord.save()
+
+#             user.is_active = True
+#             user.is_verified = True
+#             user.save()
+#             return Response({'message' : 'Email verified successfully'}, status=status.HTTP_200_OK)
+#         except User.DoesNotExist:
+#             return Response({'error' : 'user not found'}, status=status.HTTP_404_NOT_FOUND)
+
+
+
     
 
 class LoginView(APIView):
