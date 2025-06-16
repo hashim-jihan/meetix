@@ -20,7 +20,7 @@ import secrets
 User = get_user_model()
 
 if not firebase_admin._apps:
-    cred = credentials.Certificate("backend/firebase/firebase-adminsdk.json")
+    cred = credentials.Certificate(os.getenv('FIREBASE_CREDENTIALS_PATH'))
     firebase_admin.initialize_app(cred)
 
 # Create your views here.
