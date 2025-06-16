@@ -11,79 +11,63 @@ from .utils import generate_otp, sendOtp
 from dotenv import load_dotenv
 import os
 from django.utils import timezone
-import firebase_admin
-from firebase_admin import auth as firebase_auth, credentials
 from django.contrib.auth.hashers import make_password
 import secrets
 
 
 User = get_user_model()
 
-if not firebase_admin._apps:
-    cred = credentials.Certificate(os.getenv('FIREBASE_CREDENTIALS_PATH'))
-    firebase_admin.initialize_app(cred)
-
 # Create your views here.
 
 class GoogleAuthView(APIView):
     permission_classes = [AllowAny]
     def post(self,request):
-        id_token = request.data.get('id_token')
+        username = request.data.get('name')
+        email = request.data.get('email')
         
 
-        if not id_token:
-            return Response({'error': 'ID token is required'}, status=status.HTTP_400_BAD_REQUEST)
-        
         try:
-            decoded_token = firebase_auth.verify_id_token(id_token)
-            email = decoded_token.get('email')
-            username = decoded_token.get('name') or email.split('@')[0]
-
-            try:
-                user = User.objects.get(email=email)
-            except User.DoesNotExist:
-                password = secrets.token_urlsafe(12)
-                user = User.objects.create_user(
-                    email = email,
-                    username = username,
-                    password = password                
-                )
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            password = secrets.token_urlsafe(12)
+            user = User.objects.create_user(
+                email = email,
+                username = username,
+                password = password                
+            )
                 
-                user.is_verified = True
-                user.save()
+            user.is_verified = True
+            user.save()
 
-            if user.is_blocked:
-                return Response({'error': 'User is blocked'}, status=status.HTTP_403_FORBIDDEN)
+        if user.is_blocked:
+            return Response({'error': 'User is blocked'}, status=status.HTTP_403_FORBIDDEN)
                 
-            refresh = RefreshToken.for_user(user)
-            access = refresh.access_token
+        refresh = RefreshToken.for_user(user)
+        access = refresh.access_token
 
-            response = Response({
-                'success' : True,
-                'user' : UserSerializer(user).data,
-                'message' : 'Successfully authenticated with Google'
-            }, status=status.HTTP_200_OK)
+        response = Response({
+            'success' : True,
+            'user' : UserSerializer(user).data,
+            'message' : 'Successfully authenticated with Google'
+        }, status=status.HTTP_200_OK)
 
             
-            response.set_cookie(
-                key='access_token',
-                value=str(access),
-                secure=False,
-                samesite='Lax',
-                max_age=int(os.getenv('access_token_expiry'))
+        response.set_cookie(
+            key='access_token',
+            value=str(access),
+            secure=False,
+            samesite='Lax',
+            max_age=int(os.getenv('access_token_expiry'))
             )
 
-            response.set_cookie(
+        response.set_cookie(
             key='refresh_token',
             value=str(refresh),
             secure=False,
             samesite='Lax',
             max_age=int(os.getenv('cookie_max_age'))
             )
-            return response
-        except Exception as e:
-            print(e)
-            return Response({'error': 'Invalid or expired Firebase token'}, status=status.HTTP_401_UNAUTHORIZED)
+        return response
 
 
 
