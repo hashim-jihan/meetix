@@ -30,13 +30,18 @@ class UserManager(BaseUserManager):
 class User(AbstractBaseUser,PermissionsMixin):
     username = models.CharField(max_length=100,unique=True)
     email = models.EmailField(unique=True)
+
     is_blocked = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     isAdmin = models.BooleanField(default=False)
     is_staff = models.BooleanField(default=False)
     is_verified = models.BooleanField(default=False)
+
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
+
+    otp = models.CharField(max_length=6, blank=True, null=True)
+    otp_created_at = models.DateTimeField(blank=True, null=True)
 
 
     objects = UserManager()
@@ -49,19 +54,11 @@ class User(AbstractBaseUser,PermissionsMixin):
     def __str__(self):
         return self.email
     
+    def isOtpExpired(self):
+        if self.otp_created_at:
+            return timezone.now() > self.otp_created_at + timedelta(minutes=1)
+        return True
 
-
-class EmailOtp(models.Model):
-    user = models.ForeignKey(User,on_delete=models.CASCADE)
-    otp = models.CharField(max_length=6)
-    created_at = models.DateTimeField(auto_now_add=True)
-    is_verified = models.BooleanField(default=False)
-
-    def IsExpired(self):
-        return timezone.now() > self.created_at + timedelta(minutes=1)
-    
-    def __str__(self):
-        return f'{self.user.email} - {self.otp}'
 
 
 

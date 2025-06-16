@@ -46,11 +46,6 @@ REST_FRAMEWORK = {
 }
 
 
-SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
-}
-
 
 # Application definition
 
@@ -112,6 +107,13 @@ DATABASES = {
 }
 
 
+# import os
+# FIREBASE_CERT_PATH = os.path.join(BASE_DIR, 'firebase-service-account.json')
+from django.conf import settings
+BASE_DIR = settings.BASE_DIR
+
+
+
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
@@ -162,6 +164,12 @@ EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS')
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 
-CORS_ALLOW_ALL_ORIGINS = True
+# CORS_ALLOW_ALL_ORIGINS = True
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",  # your frontend dev server
+]
+
+CORS_ALLOW_CREDENTIALS = True
 
 
