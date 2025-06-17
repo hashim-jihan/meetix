@@ -43,6 +43,9 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'users.authentication.JWTAuthenticationFromCookie',
+    )
 }
 
 
@@ -58,7 +61,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'corsheaders',
-    'users',
+    'users.apps.UsersConfig',
 
 ]
 
@@ -107,8 +110,6 @@ DATABASES = {
 }
 
 
-# import os
-# FIREBASE_CERT_PATH = os.path.join(BASE_DIR, 'firebase-service-account.json')
 from django.conf import settings
 BASE_DIR = settings.BASE_DIR
 
@@ -171,5 +172,17 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 CORS_ALLOW_CREDENTIALS = True
+
+FRONTEND_URL = 'http://localhost:5173'
+
+SIMPLE_JWT = {
+    'AUTH_COOKIE': 'access_token',
+    'AUTH_COOKIE_REFRESH': 'refresh_token',
+    'AUTH_COOKIE_SECURE': False, 
+    'AUTH_COOKIE_HTTP_ONLY': True,
+    'AUTH_COOKIE_PATH': '/',
+    'AUTH_COOKIE_SAMESITE': 'Lax',  # or 'None' if frontend is on a different domain
+}
+
 
 

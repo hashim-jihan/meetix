@@ -2,7 +2,7 @@ from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
 from django.utils import timezone
 from datetime import timedelta
-
+from django.conf import settings
 
 # Create your models here.
 class UserManager(BaseUserManager):
@@ -59,6 +59,28 @@ class User(AbstractBaseUser,PermissionsMixin):
             return timezone.now() > self.otp_created_at + timedelta(minutes=1)
         return True
 
+
+
+class UserDetails(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete = models.CASCADE,
+        related_name = 'details',
+        unique = True
+    )
+    full_name = models.CharField(max_length=100, blank=True)
+    description = models.TextField(blank=True)
+    mobile = models.CharField(max_length=15, blank=True)
+    streak = models.IntegerField(default=0)
+    challenge_point = models.IntegerField(default=0)
+    is_premium = models.BooleanField(default=False)
+
+
+    def __str__(self):
+        return f'{self.user.username} details'
+    
+    class Meta:
+        db_table = 'user_details'
 
 
 
