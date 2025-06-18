@@ -18,8 +18,37 @@ from django.utils.encoding import force_bytes, smart_str, smart_bytes
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.core.mail import send_mail
 from django.conf import settings
+import re
 
+def validate_email(email):
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return re.match(pattern, email) is not None
 
+def validate_password(password):
+    if len(password) < 8:
+        return False, "Password must be at least 8 characters long"
+    if not re.search(r"\d", password):
+        return False, "Password must contain at least one digit"
+    if not re.search(r"[A-Z]", password):
+        return False, "Password must contain at least one uppercase letter"
+    if not re.search(r"[a-z]", password):
+        return False, "Password must contain at least one lowercase letter"
+    if not re.search(r"[ !@#$%&'()*+,-./[\\\]^_`{|}~"+r'"]', password):
+        return False, "Password must contain at least one special character"
+    return True, "Password is valid"
+
+def validate_username(username):
+    """
+    Validate username
+    - At least 3 characters long
+    - Only contains alphanumeric characters and underscores
+    - Doesn't start with a number
+    """
+    if len(username) < 3:
+        return False, "Username must be at least 3 characters long"
+    if not re.match(r"^[a-zA-Z][a-zA-Z0-9_]*$", username):
+        return False, "Username must start with a letter and contain only letters, numbers, and underscores"
+    return True, "Username is valid"
 
 User = get_user_model()
 
@@ -87,17 +116,63 @@ class RegisterView(APIView):
         password = request.data.get('password')
         confirmPassword = request.data.get('confirmPassword')
 
+        # Validate required fields
+        if not all([username, email, password, confirmPassword]):
+            return Response({
+                'error': 'All fields are required: username, email, password, confirmPassword'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate email format
+        if not validate_email(email):
+            return Response({
+                'error': 'Invalid email format'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate username
+        is_valid_username, username_message = validate_username(username)
+        if not is_valid_username:
+            return Response({
+                'error': username_message
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate password strength
+        is_valid_password, password_message = validate_password(password)
+        if not is_valid_password:
+            return Response({
+                'error': password_message
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check if passwords match
         if password != confirmPassword:
-            return Response({'errors' : 'passwords doest not match'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({
+                'error': 'Passwords do not match'
+            }, status=status.HTTP_400_BAD_REQUEST)
 
+        # Check if email already exists
         if User.objects.filter(email=email).exists():
-            return Response({'errors' : 'Email already exists'}, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response({
+                'error': 'Email already exists'
+            }, status=status.HTTP_400_BAD_REQUEST)
 
-        user = User.objects.create_user(username=username ,email=email, password=password)
-        user.is_active = False
-
-        otp = generate_otp()
+        # Check if username already exists
+        if User.objects.filter(username=username).exists():
+            return Response({
+                'error': 'Username already exists'
+            }, status=status.HTTP_400_BAD_REQUEST)        
+        # Create user
+        try:
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                password=password
+            )
+            user.is_active = False
+            
+            otp = generate_otp()
+        except Exception as e:
+            return Response({
+                'error': 'Failed to create user. Please try again.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         user.otp = otp
         user.otp_created_at = timezone.now()
         user.save()
@@ -168,22 +243,56 @@ class LoginView(APIView):
         email = request.data.get('email')
         password = request.data.get('password')
 
-        if not email or not password:
-            return Response({'errors' : "email and password are required"}, status=status.HTTP_400_BAD_REQUEST)
-        
+        # Validate required fields
+        if not all([email, password]):
+            return Response({
+                'error': 'Both email and password are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate email format
+        if not validate_email(email):
+            return Response({
+                'error': 'Invalid email format'
+            }, status=status.HTTP_400_BAD_REQUEST)        
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist:
-            return Response({'error': 'Invalid email or password'}, status=status.HTTP_401_UNAUTHORIZED)
-        
-        if not user.check_password(password):
-            return Response({'error': 'Invalid email or password'}, status=status.HTTP_401_UNAUTHORIZED)
-        
+            return Response({
+                'error': 'Invalid email or password'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Check if user is verified
+        if not user.is_verified:
+            return Response({
+                'error': 'Please verify your email address first'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        # Check if user is active
+        if not user.is_active:
+            return Response({
+                'error': 'Your account is not active'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        # Check if user is blocked
         if user.is_blocked:
-            return Response({'errors':'User is blocked'}, status=status.HTTP_403_FORBIDDEN)
-        
-        refresh = RefreshToken.for_user(user)
-        access = refresh.access_token
+            return Response({
+                'error': 'Your account has been blocked. Please contact support.'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        # Verify password
+        if not user.check_password(password):
+            return Response({
+                'error': 'Invalid email or password'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+
+        try:
+            # Generate tokens
+            refresh = RefreshToken.for_user(user)
+            access = refresh.access_token
+        except Exception:
+            return Response({
+                'error': 'Failed to generate authentication tokens'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         response = Response({
             'user' : UserSerializer(user).data,
@@ -308,7 +417,7 @@ class UpdateProfileView(APIView):
                 "details_errors": details_serializer.errors
             }, status=status.HTTP_400_BAD_REQUEST)
 
-    
+
 
 
 
